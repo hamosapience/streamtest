@@ -17,14 +17,14 @@ body {
 
 .player__rewind {
     /* opacity: 0; */
-    height: 12px;
+    height: 18px;
     margin-bottom: 12px;
     position: relative;
 }
 
 .player__rewind__bar {
     position: absolute;
-    height: 12px;
+    height: 100%;
     width: 50%;
     background-color: cornflowerblue;
 }
@@ -32,9 +32,9 @@ body {
 .player__rewind__cursor {
     position: absolute;
     width: 3px;
-    height: 12px;
+    height: 100%;
     background-color: white;
-    right: 50%;
+    right: 0;
 }
 
 .player__controls {

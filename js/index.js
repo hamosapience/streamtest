@@ -1,19 +1,30 @@
 (function () {
     "use strict";
 
+    //TODO: показ-скрытие полосы
+    //TODO: центрирование видео
+
     var STREAM_TYPE = "hls";
     var TIME_PRECISION = 6;
-    var REWIND_STEP = 3;
-    var MAX_REWIND_BACK = 120;
+    var REWIND_STEP = 6;
+    var MAX_REWIND = 120;
+
+    var URL = "http://dvr1.b612.tightvideo.com/5_channel/1/index.m3u8";
+    var TIMING_URL = "http://188.226.149.77:8090/timing";
+    //var TIMING_URL = "http://dvr1.b612.tightvideo.com/5_channel/last_update";
+
+    var PLAY_STATES = {
+        play: "play",
+            pause: "pause",
+            rewinding: "rewinding",
+            stop: "stop"
+    };
 
     function getCurrentDate(){
         return Math.round(new Date().getTime() / 1000);
     }
 
     var AppModel = Backbone.Model.extend({
-
-
-
 
     });
 
@@ -25,9 +36,8 @@
 
             this.Player = new PlayerView({
                 model: new Backbone.Model({
-                    url: 'http://europaplus.cdnvideo.ru/europaplus-live/eptv_main.sdp/playlist.m3u8',
-                    timingUrl: 'http://localhost:3000/update',
-                    rewindOffset: 0
+                    url: URL,
+                    timingUrl: TIMING_URL
                 })
             });
 
@@ -39,134 +49,191 @@
 
         el: ".player",
 
+        getStreamURL: function(offset){
+            var url = (this.model.get('url') + (offset ? ("?offset=" + offset) : ""));
+            console.log(url);
+            return url;
+        },
+
         initialize: function(){
 
             this.SBPlayer = Player;
 
+            this.rewindBar = new RewindBarView({
+                model: this.model
+            });
+
             this.$playButton = this.$(".player__play");
             this.$forwardButton = this.$(".player__forward");
             this.$backwardButton = this.$(".player__backward");
-            this.$rewindCursor = this.$(".player__rewind__cursor");
-            this.$rewindBar = this.$(".player__rewind__bar");
-
-            this.listenTo(this.model, 'change:play', this.playStateChanged);
-            this.listenTo(this.model, 'change:rewindOffset', this.renderRewindBar);
 
             this.$playButton.on('click', _.bind(this.clickPlay, this));
-            this.$forwardButton.on('click', _.bind(this.clickForward, this));
+
+            this.listenTo(this.model, 'change:playState', this.playStateChanged);
+            this.listenTo(this.model, 'change:rewindOffset', this.onRewindOffsetChange);
+
+            this.SBPlayer.on('ready', _.bind(function(){
+                this.model.set({
+                    playState: PLAY_STATES.play
+                });
+            }, this));
+
+            this.$forwardButton.on('click ', _.bind(this.clickForward, this));
             this.$backwardButton.on('click', _.bind(this.clickBackward, this));
 
-            setInterval(_.bind(this.updateTiming, this), 2000);
+            setInterval(_.bind(this.updateTime, this), 1000);
 
-            this.rewindBarPosition = 0;
-            this.rewindCursorPosition = 0;
-
-        },
-
-        updateTiming: function(){
-
-            var view = this;
-
-            $.ajax({
-                url: view.model.get('timingUrl'),
-                success: function(data){
-                    view.model.set({
-                        lastUpdate: data
-                    });
-                }
-            });
-        },
-
-        clickPlay: function(event){
             this.model.set({
-                play: !this.model.get('play')
+                rewindOffset: 0,
+                pauseOffset: 0
+            });
+
+            this.play();
+
+            $(document.body).on({
+                'nav_key:left': _.bind(this.clickBackward, this),
+                'nav_key:right': _.bind(this.clickForward, this),
+                'nav_key:play': _.bind(this.clickPlay, this),
+                'nav_key:pause': _.bind(this.clickPause, this),
+                'nav_key:enter': _.bind(this.clickPlay, this)
+            });
+            $$nav.on();
+
+        },
+
+
+        updateTime: function(){
+
+            var currentServerTime = this.model.get('serverTime');
+
+            if (!currentServerTime){
+                this.model.set({
+                    serverTime: getCurrentDate()
+                });
+                $.ajax({
+                    url: this.model.get('timingUrl'),
+                    success: _.bind(function(data){
+                        this.model.set({
+                            serverTime: parseInt(data)
+                        });
+                    }, this)
+                });
+            } else {
+                this.model.set({
+                    serverTime: currentServerTime + 1
+                });
+            }
+        },
+
+        clickPlay: function(){
+            var state = this.model.get('playState');
+            if (state === PLAY_STATES.play){
+                this.pause();
+            }
+            if (state === PLAY_STATES.pause){
+                this.play();
+            }
+        },
+
+        clickPause: function(){
+            this.pause();
+        },
+
+        play: function() {
+
+            var currentState = this.model.get('playState');
+
+            if (!currentState || currentState === PLAY_STATES.stop){
+
+            }
+            if (currentState === PLAY_STATES.pause){
+                var pauseTime = this.model.get('pauseTime');
+                var currentTime = this.model.get('serverTime');
+
+                var pauseOffset = currentTime - pauseTime;
+
+                this.model.set({
+                    pauseOffset: (this.model.get('pauseOffset') + pauseOffset)
+                });
+            }
+
+            var currentOffset = this.model.get('pauseOffset') + this.model.get('rewindOffset') + 6;
+
+            console.log('play', this.model.get('pauseOffset'), this.model.get('rewindOffset'));
+
+            this.SBPlayer.play({
+                url: this.getStreamURL(currentOffset),
+                type: STREAM_TYPE
+            });
+
+        },
+
+        pause: function(){
+
+            this.model.set({
+                pauseTime: this.model.get('serverTime')
+            });
+
+            this.SBPlayer.pause();
+
+            this.model.set({
+                playState: PLAY_STATES.pause
+            });
+
+        },
+
+        rewindPause: function(){
+
+            var currentState = this.model.get('playState');
+
+            if (currentState === PLAY_STATES.rewinding){
+                return;
+            }
+
+            this.SBPlayer.pause();
+
+            this._preRewindState = currentState;
+
+            this.model.set({
+                playState: PLAY_STATES.rewinding
             });
         },
 
         playStateChanged: function(){
-            var playState = this.model.get('play');
-
-            if (playState){
-                if (this.SBPlayer.state === "stop"){
-                    this.startPlay();
-                }
-                if (this.SBPlayer.state === "pause"){
-                    this.resumePlay();
-                }
-            } else {
-                this.pausePlay();
-            }
-
-            this.renderPlayButton(playState);
-
+            this.renderPlayButton();
         },
 
-        startPlay: function(){
-            this.SBPlayer.play({
-                url: this.model.get('url'),
-                type: STREAM_TYPE
-            });
-        },
+        renderPlayButton: function(){
 
-        resumePlay: function(){
+            var playState = this.model.get('playState');
 
-            var pauseDate = this.model.get('pauseDate');
-            var currentDate = getCurrentDate();
-
-            var offset = currentDate - pauseDate;
-
-            console.log(offset);
-
-            this.SBPlayer.play({
-                url: this.model.get('url'),
-                type: STREAM_TYPE
-            });
-        },
-
-        pausePlay: function(){
-
-            this.model.set({
-                pauseDate: this.model.get('lastUpdate')
-            });
-
-            this.SBPlayer.pause();
-        },
-
-        renderPlayButton: function(playState){
-            if (playState){
+            if (playState === PLAY_STATES.play){
                 this.$playButton.text('pause');
-            } else {
+            }
+            if (playState === PLAY_STATES.pause) {
                 this.$playButton.text('play');
             }
         },
 
+        clickRewindButton: function(direction){
 
-        clickForward: function(event){
+            var rewindOffset = this.model.get('rewindOffset');
 
-
-        },
-
-
-        clickBackward: function(event){
-
-            var offset = this.model.get('rewindOffset') + REWIND_STEP;
-
-            this.rewindCursorPosition = this.rewindCursorPosition + REWIND_STEP;
-
-            this.model.set({
-                'rewindOffset': offset
-            });
-
-            if (this.clickBackTimeout){
-                clearTimeout(this.clickBackTimeout);
+            if (direction === "backward" && (rewindOffset + REWIND_STEP) <= MAX_REWIND){
+                this.rewindPause();
+                this.model.set({
+                    rewindOffset: (rewindOffset + REWIND_STEP)
+                });
             }
-            if (this.barTickInterval){
-                clearInterval(this.barTickInterval);
+            if (direction === "forward" && (rewindOffset - REWIND_STEP) >= 0){
+                this.rewindPause();
+                this.model.set({
+                    rewindOffset: (rewindOffset - REWIND_STEP)
+                });
             }
 
-            this.clickBackTimeout = setTimeout(_.bind(function(){
-
-                this.barTickInterval = setInterval(_.bind(this.barTick, this), 1000);
+            this._clickRewindTimeout && clearTimeout(this._clickRewindTimeout);
+            this._clickRewindTimeout = setTimeout(_.bind(function(){
 
                 this.rewind();
 
@@ -174,53 +241,102 @@
 
         },
 
-        rewind: function(){
-            console.log('rewind', this.model.get('rewindOffset'));
+
+        clickForward: function() {
+
+            this.clickRewindButton('forward');
+
         },
 
-        renderRewindBar: function(animate){
+        clickBackward: function() {
 
-            var animationLength = (animate === "animate" ? 1000 : 0);
+            this.clickRewindButton('backward');
 
-            console.log('render',this.rewindBarPosition );
+        },
 
-            this.$rewindBar.animate({
-                width: ((this.rewindBarPosition / ( 2 * MAX_REWIND_BACK)) * 100 + 50 + "%" )
-            }, animationLength, 'linear');
+        rewind: function(){
 
-            this.$rewindCursor.animate({
-                right: ((this.rewindCursorPosition / (2 * MAX_REWIND_BACK)) * 100 + 50 + "%")
-            }, animationLength, 'linear');
+            if (this._preRewindState === PLAY_STATES.play){
+                this.play();
+            }
+            if (this._preRewindState === PLAY_STATES.pause){
+                this.model.set({
+                    playState: PLAY_STATES.pause
+                });
+            }
 
+        },
+
+        onRewindOffsetChange: function(){
+        }
+
+    });
+
+    var RewindBarView = Backbone.View.extend({
+
+        el: ".player__rewind",
+
+        initialize: function(){
+
+            this.$cursor = this.$(".player__rewind__cursor");
+            this.$bar = this.$(".player__rewind__bar");
+
+            this.step = this.$el.width() / (2 * MAX_REWIND);
+
+            this.listenTo(this.model, 'change:rewindOffset', this.updateCursorPosition);
+            this.listenTo(this.model, 'change:playState', this.onPlayStateChange);
+
+        },
+
+        show: function(){
+
+        },
+
+        hide: function(){
+
+        },
+
+        updateCursorPosition: function(){
+
+            var rewindOffset = this.model.get('rewindOffset');
+
+            this.$cursor.css({
+                right: (rewindOffset * this.step)
+            });
+
+
+        },
+
+        onPlayStateChange: function(){
+            var playState = this.model.get('playState');
+            var rewindOffset = this.model.get('rewindOffset');
+
+            if (playState === PLAY_STATES.play){
+                this.startBarTick();
+
+                this.$bar.animate({
+                    width:  (MAX_REWIND  + rewindOffset) * this.step
+                }, 1000);
+
+            }
+            else {
+                this.stopBarTick();
+            }
+        },
+
+        startBarTick: function(){
+            this.barTickInterval = setInterval(_.bind(this.barTick, this), 100);
+        },
+
+        stopBarTick: function(){
+            this.barTickInterval && clearInterval(this.barTickInterval);
         },
 
         barTick: function(){
-
-            this.rewindBarPosition = this.rewindBarPosition + REWIND_STEP;
-            this.rewindCursorPosition = this.rewindCursorPosition - REWIND_STEP;
-
-            if (this.rewindCursorPosition >= 0){
-                this.renderRewindBar('animate');
-            }
-
-            else {
-                this.rewindBarPosition = this.rewindBarPosition - REWIND_STEP;
-                this.rewindCursorPosition = 0;
-                clearInterval(this.barTickInterval);
-            }
-
-
         }
 
 
-
     });
-
-    $(document).ready(function(){
-
-    });
-
-
 
     SB.ready(function(){
 
