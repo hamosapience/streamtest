@@ -1,13 +1,11 @@
 (function () {
     "use strict";
 
-    //TODO: центрирование видео
-
     var STREAM_TYPE = "hls";
     var REWIND_STEP = 6;
     var MAX_REWIND = 360;
 
-    var OPEN_TIMEOUT = 36;
+    var OPEN_TIMEOUT = 24;
 
     var URL = "http://dvr1.b612.tightvideo.com/5_channel/1/index.m3u8";
     var TIMING_URL = "http://188.226.149.77:8090/timing";
@@ -15,9 +13,9 @@
 
     var PLAY_STATES = {
         play: "play",
-            pause: "pause",
-            rewinding: "rewinding",
-            stop: "stop"
+        pause: "pause",
+        rewinding: "rewinding",
+        stop: "stop"
     };
 
     function getCurrentDate(){
@@ -83,7 +81,8 @@
             this.$forwardButton.on('click ', _.bind(this.clickForward, this));
             this.$backwardButton.on('click', _.bind(this.clickBackward, this));
 
-            setInterval(_.bind(this.updateTime, this), 1000);
+            this.updateTime()
+            setInterval(_.bind(this.updateTime, this), 6000);
 
             this.model.set({
                 rewindOffset: 0,
@@ -123,7 +122,7 @@
                 });
             } else {
                 this.model.set({
-                    serverTime: currentServerTime + 1
+                    serverTime: currentServerTime + 6
                 });
             }
         },
@@ -161,6 +160,9 @@
                 this.model.set({
                     pauseOffset: (this.model.get('pauseOffset') + pauseOffset)
                 });
+
+
+                console.log(this.model.get('pauseOffset') , pauseOffset);
             }
 
             var currentOffset = this.model.get('pauseOffset') + this.model.get('rewindOffset');
@@ -308,6 +310,7 @@
 
             this.$cursor = this.$(".player__rewind__cursor");
             this.$bar = this.$(".player__rewind__bar");
+            this.$live = this.$(".player__rewind__live");
 
             this.step = this.$el.width() / (2 * MAX_REWIND);
 
@@ -335,6 +338,9 @@
 
                 this.$bar.animate({
                     width:  (MAX_REWIND  + rewindOffset) * this.step
+                }, 1000);
+                this.$live.animate({
+                    left: (MAX_REWIND  + rewindOffset) * this.step
                 }, 1000);
 
             }

@@ -19,6 +19,7 @@ body {
     height: 18px;
     margin-bottom: 12px;
     position: relative;
+    margin-right: 36px;
 }
 
 .player__rewind__bar {
@@ -26,6 +27,15 @@ body {
     height: 100%;
     width: 50%;
     background-color: cornflowerblue;
+}
+
+.player__rewind__live {
+    content: "live";
+    letter-spacing: 1px;
+    margin-left: 10px;
+    float: right;
+    position: absolute;
+    left: 36px;
 }
 
 .player__rewind__cursor {
