@@ -1,13 +1,13 @@
 (function () {
     "use strict";
 
-    //TODO: показ-скрытие полосы
     //TODO: центрирование видео
 
     var STREAM_TYPE = "hls";
-    var TIME_PRECISION = 6;
     var REWIND_STEP = 6;
-    var MAX_REWIND = 120;
+    var MAX_REWIND = 360;
+
+    var OPEN_TIMEOUT = 36;
 
     var URL = "http://dvr1.b612.tightvideo.com/5_channel/1/index.m3u8";
     var TIMING_URL = "http://188.226.149.77:8090/timing";
@@ -50,7 +50,8 @@
         el: ".player",
 
         getStreamURL: function(offset){
-            var url = (this.model.get('url') + (offset ? ("?offset=" + offset) : ""));
+            offset && (offset += OPEN_TIMEOUT);
+            var url = (this.model.get('url') + (offset ? ("?shift=" + offset) : ""));
             console.log(url);
             return url;
         },
@@ -63,6 +64,7 @@
                 model: this.model
             });
 
+            this.$controls = this.$('.player__controls');
             this.$playButton = this.$(".player__play");
             this.$forwardButton = this.$(".player__forward");
             this.$backwardButton = this.$(".player__backward");
@@ -95,7 +97,8 @@
                 'nav_key:right': _.bind(this.clickForward, this),
                 'nav_key:play': _.bind(this.clickPlay, this),
                 'nav_key:pause': _.bind(this.clickPause, this),
-                'nav_key:enter': _.bind(this.clickPlay, this)
+                'nav_key:enter': _.bind(this.clickPlay, this),
+                'nav_key:blue': _.bind(this.clickPause, this)
             });
             $$nav.on();
 
@@ -126,6 +129,13 @@
         },
 
         clickPlay: function(){
+            if ( this.model.get('playState') === PLAY_STATES.play){
+                return;
+            }
+            this.play();
+        },
+
+        clickPause: function(){
             var state = this.model.get('playState');
             if (state === PLAY_STATES.play){
                 this.pause();
@@ -133,10 +143,6 @@
             if (state === PLAY_STATES.pause){
                 this.play();
             }
-        },
-
-        clickPause: function(){
-            this.pause();
         },
 
         play: function() {
@@ -157,9 +163,11 @@
                 });
             }
 
-            var currentOffset = this.model.get('pauseOffset') + this.model.get('rewindOffset') + 6;
+            var currentOffset = this.model.get('pauseOffset') + this.model.get('rewindOffset');
 
             console.log('play', this.model.get('pauseOffset'), this.model.get('rewindOffset'));
+
+            this.SBPlayer.stop();
 
             this.SBPlayer.play({
                 url: this.getStreamURL(currentOffset),
@@ -217,6 +225,8 @@
 
         clickRewindButton: function(direction){
 
+            this.controlsShow();
+
             var rewindOffset = this.model.get('rewindOffset');
 
             if (direction === "backward" && (rewindOffset + REWIND_STEP) <= MAX_REWIND){
@@ -265,9 +275,27 @@
                 });
             }
 
+            setTimeout(_.bind(function(){
+                this.controlsHide();
+            }, this), 2000);
+
         },
 
         onRewindOffsetChange: function(){
+        },
+
+        controlsShow: function(){
+            this.$controls.animate({
+                opacity: 1,
+                'margin-top': 0
+            });
+        },
+
+        controlsHide: function(){
+            this.$controls.animate({
+                opacity: 0,
+                'margin-top': 10
+            });
         }
 
     });
@@ -288,14 +316,6 @@
 
         },
 
-        show: function(){
-
-        },
-
-        hide: function(){
-
-        },
-
         updateCursorPosition: function(){
 
             var rewindOffset = this.model.get('rewindOffset');
@@ -312,29 +332,14 @@
             var rewindOffset = this.model.get('rewindOffset');
 
             if (playState === PLAY_STATES.play){
-                this.startBarTick();
 
                 this.$bar.animate({
                     width:  (MAX_REWIND  + rewindOffset) * this.step
                 }, 1000);
 
             }
-            else {
-                this.stopBarTick();
-            }
-        },
 
-        startBarTick: function(){
-            this.barTickInterval = setInterval(_.bind(this.barTick, this), 100);
-        },
-
-        stopBarTick: function(){
-            this.barTickInterval && clearInterval(this.barTickInterval);
-        },
-
-        barTick: function(){
         }
-
 
     });
 
