@@ -72,6 +72,8 @@
             this.listenTo(this.model, 'change:playState', this.playStateChanged);
             this.listenTo(this.model, 'change:rewindOffset', this.onRewindOffsetChange);
 
+            this.SBPlayer.usePlayerObject = true;
+
             this.SBPlayer.on('ready', _.bind(function(){
                 this.model.set({
                     playState: PLAY_STATES.play
